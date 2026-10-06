@@ -6,17 +6,10 @@
 
 using namespace GarrysMod::Lua;
 
-#ifdef _WIN32
-#define SM64_EXPORT extern "C" __declspec(dllexport)
-#else
-#define SM64_EXPORT extern "C" __attribute__((visibility("default")))
+// Official gmod-module-base macros (fallback in case LUA_FUNCTION_STATIC is missing)
+#ifndef LUA_FUNCTION_STATIC
+#define LUA_FUNCTION_STATIC LUA_FUNCTION
 #endif
-
-// Defines: static int name(lua_State*) wrapper + body taking ILuaBase* LUA
-#define LUA_FN(name) \
-	static int name##_impl(ILuaBase* LUA); \
-	static int name(lua_State* state) { ILuaBase* b = state->luabase; b->SetState(state); return name##_impl(b); } \
-	static int name##_impl(ILuaBase* LUA)
 
 static uint8_t g_texture[4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT];
 static float g_pos[9 * SM64_GEO_MAX_TRIANGLES];
@@ -35,15 +28,15 @@ static void PushArray(ILuaBase* LUA, const float* a, int count)
 }
 
 // libsm64.Init(romString) -> ok, err
-LUA_FN(L_Init)
+LUA_FUNCTION_STATIC(L_Init)
 {
-	LUA->CheckType(1, Type::String);
+	LUA->CheckType(1, 4); // string
 	unsigned int len = 0;
 	const char* rom = LUA->GetString(1, &len);
 	if (len != 8388608) { LUA->PushBool(false); LUA->PushString("ROM must be the 8 MB US .z64"); return 2; }
 	if (!g_init) {
 		std::vector<uint8_t> copy(rom, rom + len);
-		sm64_global_init(copy.data(), g_texture, nullptr);
+		sm64_global_init(copy.data(), g_texture);
 		g_init = true;
 	}
 	LUA->PushBool(true);
@@ -51,16 +44,16 @@ LUA_FN(L_Init)
 }
 
 // libsm64.GetTexture() -> raw RGBA string (704x64)
-LUA_FN(L_GetTexture)
+LUA_FUNCTION_STATIC(L_GetTexture)
 {
 	LUA->PushString((const char*)g_texture, sizeof(g_texture));
 	return 1;
 }
 
 // libsm64.LoadSurfaces(flatIntTable, numTris)  (9 ints per triangle, SM64 space)
-LUA_FN(L_LoadSurfaces)
+LUA_FUNCTION_STATIC(L_LoadSurfaces)
 {
-	LUA->CheckType(1, Type::Table);
+	LUA->CheckType(1, 5); // table
 	int n = (int)LUA->CheckNumber(2);
 	std::vector<SM64Surface> surfs(n > 0 ? n : 0);
 	for (int t = 0; t < n; t++) {
@@ -77,14 +70,14 @@ LUA_FN(L_LoadSurfaces)
 }
 
 // libsm64.MarioCreate(x,y,z) -> id (<0 on failure)
-LUA_FN(L_MarioCreate)
+LUA_FUNCTION_STATIC(L_MarioCreate)
 {
 	LUA->PushNumber(sm64_mario_create((float)LUA->CheckNumber(1), (float)LUA->CheckNumber(2), (float)LUA->CheckNumber(3)));
 	return 1;
 }
 
 // libsm64.MarioTick(id, camLookX, camLookZ, stickX, stickY, a, b, z) -> stateTable
-LUA_FN(L_MarioTick)
+LUA_FUNCTION_STATIC(L_MarioTick)
 {
 	int id = (int)LUA->CheckNumber(1);
 	SM64MarioInputs in{};
@@ -107,7 +100,7 @@ LUA_FN(L_MarioTick)
 }
 
 // libsm64.GetGeometry() -> numTris, posTable, colTable, uvTable   (flat arrays)
-LUA_FN(L_GetGeometry)
+LUA_FUNCTION_STATIC(L_GetGeometry)
 {
 	int n = g_geo.numTrianglesUsed;
 	LUA->PushNumber(n);
@@ -117,15 +110,12 @@ LUA_FN(L_GetGeometry)
 	return 4;
 }
 
-LUA_FN(L_MarioDelete) { sm64_mario_delete((int)LUA->CheckNumber(1)); return 0; }
+LUA_FUNCTION_STATIC(L_MarioDelete) { sm64_mario_delete((int)LUA->CheckNumber(1)); return 0; }
 
 #define REG(name, fn) LUA->PushCFunction(fn); LUA->SetField(-2, name);
 
-SM64_EXPORT int gmod13_open(lua_State* state)
+GMOD_MODULE_OPEN()
 {
-	ILuaBase* LUA = state->luabase;
-	LUA->SetState(state);
-
 	g_geo.position = g_pos; g_geo.normal = g_nrm; g_geo.color = g_col; g_geo.uv = g_uv;
 	g_geo.numTrianglesUsed = 0;
 
@@ -139,9 +129,8 @@ SM64_EXPORT int gmod13_open(lua_State* state)
 	return 0;
 }
 
-SM64_EXPORT int gmod13_close(lua_State* state)
+GMOD_MODULE_CLOSE()
 {
-	(void)state;
 	if (g_init) { sm64_global_terminate(); g_init = false; }
 	return 0;
 }
