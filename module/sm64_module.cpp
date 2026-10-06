@@ -1,9 +1,22 @@
+// gmcl_sm64: thin GMod binary module around libsm64. UNTESTED SKELETON - see README.
 #include "GarrysMod/Lua/Interface.h"
 #include "libsm64.h"
 #include <vector>
 #include <cstdint>
 
 using namespace GarrysMod::Lua;
+
+#ifdef _WIN32
+#define SM64_EXPORT extern "C" __declspec(dllexport)
+#else
+#define SM64_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+
+// Defines: static int name(lua_State*) wrapper + body taking ILuaBase* LUA
+#define LUA_FN(name) \
+	static int name##_impl(ILuaBase* LUA); \
+	static int name(lua_State* state) { ILuaBase* b = state->luabase; b->SetState(state); return name##_impl(b); } \
+	static int name##_impl(ILuaBase* LUA)
 
 static uint8_t g_texture[4 * SM64_TEXTURE_WIDTH * SM64_TEXTURE_HEIGHT];
 static float g_pos[9 * SM64_GEO_MAX_TRIANGLES];
@@ -22,7 +35,7 @@ static void PushArray(ILuaBase* LUA, const float* a, int count)
 }
 
 // libsm64.Init(romString) -> ok, err
-LUA_FUNCTION_STATIC(L_Init)
+LUA_FN(L_Init)
 {
 	LUA->CheckType(1, Type::String);
 	unsigned int len = 0;
@@ -38,14 +51,14 @@ LUA_FUNCTION_STATIC(L_Init)
 }
 
 // libsm64.GetTexture() -> raw RGBA string (704x64)
-LUA_FUNCTION_STATIC(L_GetTexture)
+LUA_FN(L_GetTexture)
 {
 	LUA->PushString((const char*)g_texture, sizeof(g_texture));
 	return 1;
 }
 
 // libsm64.LoadSurfaces(flatIntTable, numTris)  (9 ints per triangle, SM64 space)
-LUA_FUNCTION_STATIC(L_LoadSurfaces)
+LUA_FN(L_LoadSurfaces)
 {
 	LUA->CheckType(1, Type::Table);
 	int n = (int)LUA->CheckNumber(2);
@@ -64,14 +77,14 @@ LUA_FUNCTION_STATIC(L_LoadSurfaces)
 }
 
 // libsm64.MarioCreate(x,y,z) -> id (<0 on failure)
-LUA_FUNCTION_STATIC(L_MarioCreate)
+LUA_FN(L_MarioCreate)
 {
 	LUA->PushNumber(sm64_mario_create((float)LUA->CheckNumber(1), (float)LUA->CheckNumber(2), (float)LUA->CheckNumber(3)));
 	return 1;
 }
 
 // libsm64.MarioTick(id, camLookX, camLookZ, stickX, stickY, a, b, z) -> stateTable
-LUA_FUNCTION_STATIC(L_MarioTick)
+LUA_FN(L_MarioTick)
 {
 	int id = (int)LUA->CheckNumber(1);
 	SM64MarioInputs in{};
@@ -94,7 +107,7 @@ LUA_FUNCTION_STATIC(L_MarioTick)
 }
 
 // libsm64.GetGeometry() -> numTris, posTable, colTable, uvTable   (flat arrays)
-LUA_FUNCTION_STATIC(L_GetGeometry)
+LUA_FN(L_GetGeometry)
 {
 	int n = g_geo.numTrianglesUsed;
 	LUA->PushNumber(n);
@@ -104,12 +117,15 @@ LUA_FUNCTION_STATIC(L_GetGeometry)
 	return 4;
 }
 
-LUA_FUNCTION_STATIC(L_MarioDelete) { sm64_mario_delete((int)LUA->CheckNumber(1)); return 0; }
+LUA_FN(L_MarioDelete) { sm64_mario_delete((int)LUA->CheckNumber(1)); return 0; }
 
 #define REG(name, fn) LUA->PushCFunction(fn); LUA->SetField(-2, name);
 
-GMOD_MODULE_OPEN()
+SM64_EXPORT int gmod13_open(lua_State* state)
 {
+	ILuaBase* LUA = state->luabase;
+	LUA->SetState(state);
+
 	g_geo.position = g_pos; g_geo.normal = g_nrm; g_geo.color = g_col; g_geo.uv = g_uv;
 	g_geo.numTrianglesUsed = 0;
 
@@ -123,8 +139,9 @@ GMOD_MODULE_OPEN()
 	return 0;
 }
 
-GMOD_MODULE_CLOSE()
+SM64_EXPORT int gmod13_close(lua_State* state)
 {
+	(void)state;
 	if (g_init) { sm64_global_terminate(); g_init = false; }
 	return 0;
 }
