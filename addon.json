@@ -1,0 +1,6 @@
+{
+	"title": "SM64 for GMod (libsm64)",
+	"type": "tool",
+	"tags": ["fun"],
+	"ignore": ["module/*", "CMakeLists.txt", "README.md"]
+}
