@@ -26,7 +26,7 @@ jobs:
       - name: Get libsm64 and gmod-module-base
         run: |
           git clone --depth 1 https://github.com/libsm64/libsm64 ../libsm64
-          git clone --depth 1 https://github.com/Facepunch/gmod-module-base ../gmod-module-base
+          git clone --depth 1 -b x86-64-support https://github.com/Facepunch/gmod-module-base ../gmod-module-base || git clone --depth 1 -b master https://github.com/Facepunch/gmod-module-base ../gmod-module-base
 
       - name: Build libsm64
         run: |
