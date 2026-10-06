@@ -1,0 +1,55 @@
+name: Build gmcl_sm64 (Windows x64)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git make python
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+
+      - name: Get libsm64 and gmod-module-base
+        run: |
+          git clone --depth 1 https://github.com/libsm64/libsm64 ../libsm64
+          git clone --depth 1 https://github.com/Facepunch/gmod-module-base ../gmod-module-base
+
+      - name: Build libsm64
+        run: |
+          cd ../libsm64
+          make lib || make
+          ls dist
+
+      - name: Build module
+        run: |
+          cmake -S . -B build -G "MinGW Makefiles" \
+            -DGMOD_MODULE_BASE="$(cygpath -m "$PWD/../gmod-module-base")" \
+            -DLIBSM64="$(cygpath -m "$PWD/../libsm64")"
+          cmake --build build
+
+      - name: Collect files
+        run: |
+          mkdir -p out
+          cp build/gmcl_sm64_win64.dll out/
+          cp ../libsm64/dist/sm64.dll out/
+          for d in $(ldd ../libsm64/dist/sm64.dll | grep -i mingw64 | awk '{print $3}'); do cp "$d" out/; done
+          ls out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sm64-gmod-win64
+          path: out/
