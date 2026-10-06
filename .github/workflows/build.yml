@@ -28,6 +28,15 @@ jobs:
           git clone --depth 1 https://github.com/libsm64/libsm64 ../libsm64
           git clone --depth 1 -b x86-64-support https://github.com/Facepunch/gmod-module-base ../gmod-module-base || git clone --depth 1 -b master https://github.com/Facepunch/gmod-module-base ../gmod-module-base
 
+      - name: Show gmod-module-base info
+        run: |
+          cd ../gmod-module-base
+          git branch --show-current || true
+          git log -1 --oneline
+          ls include/GarrysMod/Lua
+          grep -rn "luabase\|GMOD_MODULE\|LUA_FUNCTION\|gmod13_open\|_ignore_this" include || true
+          grep -n "String\|Table" include/GarrysMod/Lua/Types.h || true
+
       - name: Build libsm64
         run: |
           cd ../libsm64
